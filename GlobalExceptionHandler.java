@@ -2,6 +2,7 @@ package com.example.alquilerherramientas.exception;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -37,56 +38,79 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, Object>> manejarRecursoNoEncontrado(
             RecursoNoEncontradoException excepcion) {
 
-        Map<String, Object> respuesta = new LinkedHashMap<>();
-        respuesta.put("estado", 404);
-        respuesta.put("mensaje", excepcion.getMessage());
-
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(respuesta);
+        return crearRespuesta(
+                HttpStatus.NOT_FOUND,
+                excepcion.getMessage()
+        );
     }
 
     @ExceptionHandler(RecursoNoDisponibleException.class)
-    public ResponseEntity<String> manejarRecursoNoDisponible(
+    public ResponseEntity<Map<String, Object>> manejarRecursoNoDisponible(
             RecursoNoDisponibleException excepcion) {
 
-        return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(excepcion.getMessage());
+        return crearRespuesta(
+                HttpStatus.CONFLICT,
+                excepcion.getMessage()
+        );
     }
 
     @ExceptionHandler(FechasInvalidasException.class)
-    public ResponseEntity<String> manejarFechasInvalidas(
+    public ResponseEntity<Map<String, Object>> manejarFechasInvalidas(
             FechasInvalidasException excepcion) {
 
-        return ResponseEntity.badRequest()
-                .body(excepcion.getMessage());
+        return crearRespuesta(
+                HttpStatus.BAD_REQUEST,
+                excepcion.getMessage()
+        );
     }
 
     @ExceptionHandler(DevolucionYaRegistradaException.class)
-    public ResponseEntity<String> manejarDevolucionDuplicada(
+    public ResponseEntity<Map<String, Object>> manejarDevolucionDuplicada(
             DevolucionYaRegistradaException excepcion) {
 
-        return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(excepcion.getMessage());
+        return crearRespuesta(
+                HttpStatus.CONFLICT,
+                excepcion.getMessage()
+        );
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<String> manejarArgumentoInvalido(
+    public ResponseEntity<Map<String, Object>> manejarArgumentoInvalido(
             IllegalArgumentException excepcion) {
 
-        return ResponseEntity.badRequest()
-                .body(excepcion.getMessage());
+        return crearRespuesta(
+                HttpStatus.BAD_REQUEST,
+                excepcion.getMessage()
+        );
     }
 
-    @ExceptionHandler(RuntimeException.class)
-    public ResponseEntity<String> manejarErrorNoEncontrado(
-            RuntimeException excepcion) {
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<Map<String, Object>> manejarCuerpoInvalido(
+            HttpMessageNotReadableException excepcion) {
 
-        if ("La herramienta no existe".equals(excepcion.getMessage())
-                || "El alquiler no existe".equals(excepcion.getMessage())) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(excepcion.getMessage());
-        }
+        return crearRespuesta(
+                HttpStatus.BAD_REQUEST,
+                "El cuerpo de la solicitud está vacío o tiene un formato inválido"
+        );
+    }
 
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body("Ocurrió un error interno");
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<Map<String, Object>> manejarErrorInesperado(
+            Exception excepcion) {
+
+        return crearRespuesta(
+                HttpStatus.INTERNAL_SERVER_ERROR,
+                "Ocurrió un error interno en el servidor"
+        );
+    }
+
+    private ResponseEntity<Map<String, Object>> crearRespuesta(
+            HttpStatus estado, String mensaje) {
+
+        Map<String, Object> respuesta = new LinkedHashMap<>();
+        respuesta.put("estado", estado.value());
+        respuesta.put("mensaje", mensaje);
+
+        return ResponseEntity.status(estado).body(respuesta);
     }
 }

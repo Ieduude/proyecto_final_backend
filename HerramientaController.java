@@ -51,7 +51,7 @@ public class HerramientaController {
         herramientaService.eliminar(id);
         return ResponseEntity.noContent().build();
     }
-    
+
     @PutMapping("/{id}")
     public ResponseEntity<Herramienta> actualizar(
             @PathVariable Long id,

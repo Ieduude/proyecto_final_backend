@@ -1,13 +1,17 @@
 package com.example.alquilerherramientas.service;
 
+import com.example.alquilerherramientas.dto.AlquilerRequestDTO;
 import com.example.alquilerherramientas.entity.Alquiler;
 import com.example.alquilerherramientas.entity.Herramienta;
-import com.example.alquilerherramientas.repository.AlquilerRepository;
-import com.example.alquilerherramientas.repository.HerramientaRepository;
 import com.example.alquilerherramientas.exception.DevolucionYaRegistradaException;
 import com.example.alquilerherramientas.exception.FechasInvalidasException;
 import com.example.alquilerherramientas.exception.RecursoNoDisponibleException;
+import com.example.alquilerherramientas.exception.RecursoNoEncontradoException;
+import com.example.alquilerherramientas.repository.AlquilerRepository;
+import com.example.alquilerherramientas.repository.HerramientaRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import com.example.alquilerherramientas.dto.ResumenAlquileresDTO;
 
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
@@ -33,103 +37,110 @@ public class AlquilerService {
     public Alquiler buscarPorId(Long id) {
         return alquilerRepository.findById(id)
                 .orElseThrow(() ->
-                        new RuntimeException("El alquiler no existe"));
+                        new RecursoNoEncontradoException(
+                                "Alquiler no encontrado con ID: " + id));
     }
 
-    public Alquiler guardar(Alquiler alquiler) {
+    @Transactional
+    public Alquiler guardar(AlquilerRequestDTO dto) {
 
-        // Validar que se haya seleccionado una herramienta con ID.
-        if (alquiler.getHerramienta() == null
-                || alquiler.getHerramienta().getId() == null) {
-            throw new IllegalArgumentException(
-                    "Debe seleccionar una herramienta válida");
+        if (dto.getFechaAlquiler() == null
+                || dto.getFechaPrevistaDevolucion() == null) {
+            throw new FechasInvalidasException(
+                    "Las fechas del alquiler son obligatorias");
         }
 
-        Long idHerramienta = alquiler.getHerramienta().getId();
-
-        // Buscar la herramienta en la base de datos.
-        Herramienta herramienta = herramientaRepository.findById(idHerramienta)
-                .orElseThrow(() ->
-                        new RuntimeException("La herramienta no existe"));
-
-        // Verificar que la herramienta esté disponible.
-        if (!herramienta.isDisponible()) {
-            throw new RecursoNoDisponibleException(
-                    "La herramienta no está disponible para alquilar");
+        if (dto.getFechaAlquiler().isAfter(LocalDate.now())) {
+            throw new FechasInvalidasException(
+                    "La fecha de alquiler no puede ser futura");
         }
 
-        // Calcular los días del alquiler.
         long dias = ChronoUnit.DAYS.between(
-                alquiler.getFechaAlquiler(),
-                alquiler.getFechaPrevistaDevolucion()
+                dto.getFechaAlquiler(),
+                dto.getFechaPrevistaDevolucion()
         );
 
-        // Validar que la devolución prevista sea posterior al alquiler.
         if (dias <= 0) {
             throw new FechasInvalidasException(
                     "La fecha prevista debe ser posterior a la fecha de alquiler");
         }
 
-        // Calcular el costo estimado.
+        if (dto.getHerramientaId() == null
+                || dto.getHerramientaId() <= 0) {
+            throw new IllegalArgumentException(
+                    "Debe seleccionar una herramienta válida");
+        }
+
+        Herramienta herramienta = herramientaRepository
+                .findById(dto.getHerramientaId())
+                .orElseThrow(() ->
+                        new RecursoNoEncontradoException(
+                                "Herramienta no encontrada con ID: "
+                                        + dto.getHerramientaId()));
+
+        if (!herramienta.isDisponible()) {
+            throw new RecursoNoDisponibleException(
+                    "La herramienta no está disponible para alquilar");
+        }
+
         double costo = dias * herramienta.getTarifaDiaria();
 
+        Alquiler alquiler = new Alquiler();
+        alquiler.setNombreCliente(dto.getNombreCliente().trim());
         alquiler.setHerramienta(herramienta);
+        alquiler.setFechaAlquiler(dto.getFechaAlquiler());
+        alquiler.setFechaPrevistaDevolucion(
+                dto.getFechaPrevistaDevolucion());
+        alquiler.setFechaDevolucion(null);
         alquiler.setCostoEstimado(costo);
 
-        // Marcar la herramienta como no disponible.
         herramienta.setDisponible(false);
         herramientaRepository.save(herramienta);
 
         return alquilerRepository.save(alquiler);
     }
 
+    @Transactional
     public void eliminar(Long id) {
+        Alquiler alquiler = buscarPorId(id);
 
-        Alquiler alquiler = alquilerRepository.findById(id)
-                .orElseThrow(() ->
-                        new RuntimeException("El alquiler no existe"));
-
-        // No permitir eliminar alquileres activos.
         if (alquiler.getFechaDevolucion() == null) {
             throw new RecursoNoDisponibleException(
-                    "No se puede eliminar un alquiler activo; primero debe registrarse su devolución");
+                    "No se puede eliminar un alquiler activo; "
+                            + "primero debe registrarse su devolución");
         }
 
         alquilerRepository.delete(alquiler);
     }
 
+    @Transactional
     public Alquiler registrarDevolucion(Long id) {
+        Alquiler alquiler = buscarPorId(id);
 
-        Alquiler alquiler = alquilerRepository.findById(id)
-                .orElseThrow(() ->
-                        new RuntimeException("El alquiler no existe"));
-
-        // Evitar registrar dos veces la misma devolución.
         if (alquiler.getFechaDevolucion() != null) {
             throw new DevolucionYaRegistradaException(
                     "Este alquiler ya tiene registrada su devolución");
         }
 
-        // Registrar la fecha de devolución.
-        alquiler.setFechaDevolucion(LocalDate.now());
+        LocalDate hoy = LocalDate.now();
 
-        // Habilitar nuevamente la herramienta.
+        alquiler.setFechaDevolucion(hoy);
+
         Herramienta herramienta = alquiler.getHerramienta();
         herramienta.setDisponible(true);
-
         herramientaRepository.save(herramienta);
 
         return alquilerRepository.save(alquiler);
     }
 
     public List<Alquiler> listarAtrasados() {
-
         LocalDate hoy = LocalDate.now();
 
         return alquilerRepository.findAll().stream()
                 .filter(alquiler ->
                         alquiler.getFechaDevolucion() == null
-                                && alquiler.getFechaPrevistaDevolucion().isBefore(hoy))
+                                && alquiler.getFechaPrevistaDevolucion()
+                                .isBefore(hoy))
                 .toList();
     }
 
@@ -138,5 +149,39 @@ public class AlquilerService {
                 .filter(alquiler ->
                         alquiler.getFechaDevolucion() == null)
                 .toList();
+    }
+
+    public ResumenAlquileresDTO obtenerResumen() {
+
+        List<Alquiler> alquileres = alquilerRepository.findAll();
+
+        long totalAlquileres = alquileres.size();
+
+        long activos = alquileres.stream()
+                .filter(alquiler -> alquiler.getFechaDevolucion() == null)
+                .count();
+
+        LocalDate hoy = LocalDate.now();
+
+        long atrasados = alquileres.stream()
+                .filter(alquiler ->
+                        alquiler.getFechaDevolucion() == null
+                                && alquiler.getFechaPrevistaDevolucion() != null
+                                && alquiler.getFechaPrevistaDevolucion().isBefore(hoy))
+                .count();
+
+        double costoTotal = alquileres.stream()
+                .mapToDouble(alquiler ->
+                        alquiler.getCostoEstimado() == null
+                                ? 0.0
+                                : alquiler.getCostoEstimado())
+                .sum();
+
+        return new ResumenAlquileresDTO(
+                totalAlquileres,
+                activos,
+                atrasados,
+                costoTotal
+        );
     }
 }

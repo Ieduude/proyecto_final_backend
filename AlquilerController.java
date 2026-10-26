@@ -1,11 +1,13 @@
 package com.example.alquilerherramientas.controller;
 
+import com.example.alquilerherramientas.dto.AlquilerRequestDTO;
 import com.example.alquilerherramientas.entity.Alquiler;
 import com.example.alquilerherramientas.service.AlquilerService;
-import org.springframework.web.bind.annotation.*;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+import com.example.alquilerherramientas.dto.ResumenAlquileresDTO;
 
 import java.util.List;
 
@@ -35,15 +37,15 @@ public class AlquilerController {
     }
 
     @GetMapping("/{id}")
-    public Alquiler buscarPorId(@PathVariable Long id) {
-        return alquilerService.buscarPorId(id);
+    public ResponseEntity<Alquiler> buscarPorId(@PathVariable Long id) {
+        return ResponseEntity.ok(alquilerService.buscarPorId(id));
     }
 
     @PostMapping
     public ResponseEntity<Alquiler> guardar(
-            @Valid @RequestBody Alquiler alquiler) {
+            @Valid @RequestBody AlquilerRequestDTO dto) {
 
-        Alquiler nuevoAlquiler = alquilerService.guardar(alquiler);
+        Alquiler nuevoAlquiler = alquilerService.guardar(dto);
 
         return ResponseEntity
                 .status(HttpStatus.CREATED)
@@ -57,7 +59,14 @@ public class AlquilerController {
     }
 
     @PutMapping("/{id}/devolucion")
-    public Alquiler registrarDevolucion(@PathVariable Long id) {
-        return alquilerService.registrarDevolucion(id);
+    public ResponseEntity<Alquiler> registrarDevolucion(
+            @PathVariable Long id) {
+        return ResponseEntity.ok(
+                alquilerService.registrarDevolucion(id));
+    }
+
+    @GetMapping("/resumen")
+    public ResponseEntity<ResumenAlquileresDTO> obtenerResumen() {
+        return ResponseEntity.ok(alquilerService.obtenerResumen());
     }
 }
