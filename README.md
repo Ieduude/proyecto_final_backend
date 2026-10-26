@@ -71,6 +71,6 @@ También incluye DTO, validaciones y manejo de excepciones para controlar los da
 
 ## Autor
 
-Ángel Ivo Altavilla Castillo
+Iván Eduardo del Cid Véliz
 
 Proyecto académico desarrollado como práctica de Spring Boot, API REST y bases de datos relacionales.
